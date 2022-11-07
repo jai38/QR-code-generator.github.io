@@ -1,3 +1,6 @@
+const accessToken = "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";
+const domain = "https://materia-depot.myshopify.com";
+
 const displayQR = () => {
   const productNames = JSON.parse(
     sessionStorage.getItem("currentProductNames")
@@ -106,6 +109,7 @@ const generateQR = async (productTitle) => {
       method: "GET",
     }
   );
+  QRCode;
   const json = await res.json();
   const products = json.products;
   products.forEach((product) => {
@@ -134,18 +138,56 @@ const generateQR = async (productTitle) => {
   displayQR();
   console.log(currentProductLinks);
 };
-const handleOrderData = (event) => {
-  let productTitle = [];
+const getProducts = async (orders) => {
+  let products = [];
+  for (let i = 0; i < orders.length; i++) {
+    const order = await fetch(
+      `${domain}/admin/api/2022-10/orders/${orders[i]}.json`,
+      {
+        headers: {
+          "X-Shopify-Access-Token": accessToken,
+          "Access-Control-Allow-Origin": "*",
+        },
+      }
+    );
+    const orderJson = await order.json();
+    const orderLineItems = orderJson.order.line_items;
+    let productIds = [];
+    for (let j = 0; j < orderLineItems.length; j++) {
+      productIds.push(orderLineItems[j].id);
+    }
+    for (let k = 0; k < productIds.length; k++) {
+      const product = await fetch(
+        `${domain}/admin/api/2022-10/products/${productIds[k]}.json`,
+        {
+          headers: {
+            "X-Shopify-Access-Token": accessToken,
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      );
+      const productJson = await product.json();
+      products.push({
+        name: productJson.product.title,
+        url: productJson.product.handle,
+      });
+    }
+  }
+  return products;
+};
+const handleOrderData = async (event) => {
+  let ordersId = [];
   const rows = event.target.result.split("\n");
   const headingRow = rows[0];
-  const headingCell = headingRow.split(",");
-  const productTitleIndex = headingCell.indexOf("Lineitem name");
+  const headingCell = headingRow.split(",").reverse();
+  const ordersIdIndex = headingCell.indexOf("Id");
   rows.shift();
   rows.forEach((row) => {
-    const cell = row.split(",");
-    productTitle.push(cell[productTitleIndex]);
+    const cell = row.split(",").reverse();
+    if (cell[ordersIdIndex]) ordersId.push(cell[ordersIdIndex]);
   });
-  generateQR(productTitle);
+  const products = await getProducts(ordersId);
+  console.log(products);
 };
 const handleOrderCSV = (event) => {
   const fileList = event.target.files;
@@ -157,3 +199,11 @@ const handleOrderCSV = (event) => {
 };
 const ordersCSV = document.getElementById("orders-csv");
 ordersCSV.addEventListener("change", handleOrderCSV);
+// const qrcode = new QRCode(document.getElementById("qrcode"), {
+//   text: "http://jindo.dev.naver.com/collie",
+//   width: 128,
+//   height: 128,
+//   colorDark: "#000",
+//   colorLight: "#fff",
+//   correctLevel: QRCode.CorrectLevel.H,
+// });
